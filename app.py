@@ -1,211 +1,384 @@
 import tkinter as tk
-from tkinter import ttk,messagebox
-import sqlite3
-from datetime import date,datetime,timedelta
-import matplotlib.pyplot as plt
+from tkinter import ttk
+import random
+import json
+import os
+import pyttsx3
 
-# DATABASE
-conn = sqlite3.connect("fitness.db")
-cursor = conn.cursor()
+# ---------------- TEXT TO SPEECH ---------------- #
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users(
-username TEXT PRIMARY KEY,
-password TEXT
-)
-""")
+engine = pyttsx3.init()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS fitness(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-date TEXT,
-steps INTEGER,
-exercise TEXT,
-workout_time INTEGER,
-calories INTEGER
-)
-""")
+def speak():
+    text = word_label.cget("text")
+    if text != "":
+        engine.say(text)
+        engine.runAndWait()
 
-conn.commit()
+# ---------------- LANGUAGE DATA ---------------- #
 
-# ---------------- LOGIN WINDOW ----------------
+languages={
 
-def login():
+"Hindi":{
 
-    username = user_entry.get()
-    password = pass_entry.get()
+"Vocabulary":[
+("Hello",["नमस्ते","namaste"]),
+("Thank you",["धन्यवाद","dhanyavad"]),
+("Water",["पानी","pani","paani"]),
+("Food",["खाना","khana"]),
+("Friend",["दोस्त","dost"]),
+("House",["घर","ghar"]),
+("Book",["किताब","kitaab","kitab"]),
+("Dog",["कुत्ता","kutta"]),
+("Cat",["बिल्ली","billi"]),
+("Sun",["सूरज","suraj"]),
+("Moon",["चाँद","chand","channd"]),
+("Mother",["माँ","maa"]),
+("Father",["पिता","pita"]),
+("Brother",["भाई","bhai"]),
+("Sister",["बहन","behen"]),
+("School",["स्कूल","school"]),
+("Car",["गाड़ी","gaadi","gadi"])
+],
 
-    cursor.execute("SELECT * FROM users WHERE username=? AND password=?",(username,password))
-    result = cursor.fetchone()
+"Sentences":[
+("How are you?",["आप कैसे हैं","aap kaise hain"]),
+("I am fine",["मैं ठीक हूँ","mai thik hu"]),
+("What is your name?",["आपका नाम क्या है","aapka naam kya hai"]),
+("Where are you from?",["आप कहाँ से हैं","aap kahan se hain"]),
+("Good morning",["सुप्रभात","suprabhat"]),
+("Good night",["शुभ रात्रि","shubh ratri"])
+]
 
-    if result:
-        login_window.destroy()
-        open_app()
+},
+
+"Spanish":{
+"Vocabulary":[
+("Hello",["hola"]),
+("Thank you",["gracias"]),
+("Please",["por favor"]),
+("Yes",["si"]),
+("No",["no"]),
+("Water",["agua"]),
+("Food",["comida"]),
+("Friend",["amigo"]),
+("House",["casa"]),
+("School",["escuela"]),
+("Book",["libro"]),
+("Dog",["perro"]),
+("Cat",["gato"]),
+("Sun",["sol"]),
+("Moon",["luna"])
+],
+"Sentences":[
+("How are you?",["como estas"]),
+("I am fine",["estoy bien"]),
+("Good morning",["buenos dias"]),
+("Good night",["buenas noches"]),
+("Nice to meet you",["mucho gusto"])
+]
+},
+
+"French":{
+"Vocabulary":[
+("Hello",["bonjour"]),
+("Thank you",["merci"]),
+("Please",["s'il vous plait"]),
+("Yes",["oui"]),
+("No",["non"]),
+("Water",["eau"]),
+("Food",["nourriture"]),
+("Friend",["ami"]),
+("House",["maison"]),
+("Book",["livre"]),
+("Sun",["soleil"]),
+("Moon",["lune"])
+],
+"Sentences":[
+("How are you?",["comment ca va"]),
+("I am fine",["je vais bien"]),
+("Good morning",["bonjour"]),
+("Good night",["bonne nuit"])
+]
+},
+
+"German":{
+"Vocabulary":[
+("Hello",["hallo"]),
+("Thank you",["danke"]),
+("Please",["bitte"]),
+("Yes",["ja"]),
+("No",["nein"]),
+("Water",["wasser"]),
+("Food",["essen"]),
+("Friend",["freund"]),
+("House",["haus"])
+],
+"Sentences":[
+("How are you?",["wie geht es dir"]),
+("I am fine",["mir geht es gut"])
+]
+},
+
+"Italian":{
+"Vocabulary":[
+("Hello",["ciao"]),
+("Thank you",["grazie"]),
+("Water",["acqua"]),
+("Food",["cibo"])
+],
+"Sentences":[
+("Good morning",["buongiorno"]),
+("Good night",["buona notte"])
+]
+},
+
+"Japanese":{
+"Vocabulary":[
+("Hello",["konnichiwa"]),
+("Thank you",["arigato"]),
+("Water",["mizu"])
+],
+"Sentences":[
+("Good morning",["ohayo"])
+]
+},
+
+"Korean":{
+"Vocabulary":[
+("Hello",["annyeong"]),
+("Thank you",["gamsahamnida"])
+],
+"Sentences":[
+("Good morning",["joeun achim"])
+]
+},
+
+"Chinese":{
+"Vocabulary":[
+("Hello",["ni hao"]),
+("Thank you",["xie xie"])
+],
+"Sentences":[
+("Good morning",["zao shang hao"])
+]
+},
+
+"Arabic":{
+"Vocabulary":[
+("Hello",["salam"]),
+("Thank you",["shukran"])
+],
+"Sentences":[
+("Good morning",["sabah al khair"])
+]
+},
+
+"Russian":{
+"Vocabulary":[
+("Hello",["privet"]),
+("Thank you",["spasibo"])
+],
+"Sentences":[
+("Good morning",["dobroe utro"])
+]
+}
+
+}
+
+# ---------------- SAVE SCORE ---------------- #
+
+score_file="progress.json"
+
+if os.path.exists(score_file):
+    with open(score_file,"r") as f:
+        data=json.load(f)
+else:
+    data={"score":0}
+
+# ---------------- FUNCTIONS ---------------- #
+
+current_word=None
+current_answers=None
+
+def new_flashcard():
+
+    global current_word,current_answers
+
+    lang=language_var.get()
+    cat=category_var.get()
+
+    pair=random.choice(languages[lang][cat])
+
+    current_word=pair[0]
+    current_answers=pair[1]
+
+    word_label.config(text=current_word)
+    translation_label.config(text="")
+
+def show_translation():
+
+    if current_answers:
+        translation_label.config(text=current_answers[0])
+
+def start_quiz():
+
+    global current_word,current_answers
+
+    lang=language_var.get()
+    cat=category_var.get()
+
+    pair=random.choice(languages[lang][cat])
+
+    current_word=pair[0]
+    current_answers=pair[1]
+
+    word_label.config(text="Translate : "+current_word)
+
+    translation_label.config(text="")
+    answer.delete(0,tk.END)
+
+def normalize(text):
+
+    text=text.lower().strip()
+    text=text.replace("aa","a")
+    text=text.replace("nn","n")
+
+    return text
+
+def check_answer():
+
+    global data
+
+    user=normalize(answer.get())
+
+    accepted=[normalize(a) for a in current_answers]
+
+    if user in accepted:
+
+        translation_label.config(text="✅ Correct",fg="green")
+        data["score"]+=1
+
     else:
-        messagebox.showerror("Error","Invalid Login")
 
+        translation_label.config(
+        text="❌ Correct Answer : "+current_answers[0],
+        fg="red")
 
-def register():
+    score_label.config(text="Score : "+str(data["score"]))
 
-    username = user_entry.get()
-    password = pass_entry.get()
+    with open(score_file,"w") as f:
+        json.dump(data,f)
 
-    try:
-        cursor.execute("INSERT INTO users VALUES(?,?)",(username,password))
-        conn.commit()
-        messagebox.showinfo("Success","User Registered")
-    except:
-        messagebox.showerror("Error","User already exists")
+# ---------------- UI ---------------- #
 
+root=tk.Tk()
+root.title("Language Learning App")
+root.geometry("620x540")
+root.configure(bg="#f2f4f8")
 
-login_window = tk.Tk()
-login_window.title("Fitness Tracker Login")
-login_window.geometry("300x250")
+title=tk.Label(root,
+text="🌍 Language Learning App",
+font=("Arial",22,"bold"),
+bg="#f2f4f8")
 
-tk.Label(login_window,text="Fitness Tracker",font=("Arial",16,"bold")).pack(pady=10)
+title.pack(pady=20)
 
-tk.Label(login_window,text="Username").pack()
-user_entry = tk.Entry(login_window)
-user_entry.pack()
+top_frame=tk.Frame(root,bg="#f2f4f8")
+top_frame.pack()
 
-tk.Label(login_window,text="Password").pack()
-pass_entry = tk.Entry(login_window,show="*")
-pass_entry.pack()
+language_var=tk.StringVar(value="Hindi")
+category_var=tk.StringVar(value="Vocabulary")
 
-tk.Button(login_window,text="Login",command=login,bg="green",fg="white").pack(pady=5)
-tk.Button(login_window,text="Register",command=register,bg="blue",fg="white").pack()
+ttk.Label(top_frame,text="Language").grid(row=0,column=0,padx=10)
 
-# ---------------- MAIN APP ----------------
+ttk.Combobox(
+top_frame,
+textvariable=language_var,
+values=list(languages.keys()),
+width=15).grid(row=0,column=1)
 
-def open_app():
+ttk.Label(top_frame,text="Category").grid(row=0,column=2,padx=10)
 
-    root = tk.Tk()
-    root.title("Fitness Tracker")
-    root.geometry("750x550")
-    root.configure(bg="#f5f7fa")
+ttk.Combobox(
+top_frame,
+textvariable=category_var,
+values=["Vocabulary","Sentences"],
+width=15).grid(row=0,column=3)
 
-    title = tk.Label(root,text="Fitness Tracker Dashboard",
-    font=("Arial",20,"bold"),bg="#f5f7fa")
-    title.pack(pady=10)
+word_label=tk.Label(
+root,
+text="",
+font=("Arial",22,"bold"),
+bg="#f2f4f8")
 
-    frame = tk.Frame(root,bg="white",bd=2,relief="groove")
-    frame.pack(pady=10)
+word_label.pack(pady=30)
 
-    tk.Label(frame,text="Steps").grid(row=0,column=0,padx=10,pady=10)
-    steps_entry = tk.Entry(frame)
-    steps_entry.grid(row=0,column=1)
+# 🔊 Pronunciation Button
+tk.Button(
+root,
+text="🔊 Pronounce",
+command=speak,
+bg="#009688",
+fg="white",
+font=("Arial",12),
+width=18).pack(pady=5)
 
-    tk.Label(frame,text="Exercise").grid(row=1,column=0,padx=10,pady=10)
-    exercise_entry = tk.Entry(frame)
-    exercise_entry.grid(row=1,column=1)
+translation_label=tk.Label(
+root,
+text="",
+font=("Arial",18),
+bg="#f2f4f8")
 
-    tk.Label(frame,text="Workout Time").grid(row=2,column=0,padx=10,pady=10)
-    time_entry = tk.Entry(frame)
-    time_entry.grid(row=2,column=1)
+translation_label.pack()
 
-    tk.Label(frame,text="Calories").grid(row=3,column=0,padx=10,pady=10)
-    cal_entry = tk.Entry(frame)
-    cal_entry.grid(row=3,column=1)
+btn_frame=tk.Frame(root,bg="#f2f4f8")
+btn_frame.pack(pady=20)
 
-    # SAVE DATA
-    def save_data():
+btn_style={"font":("Arial",11),"width":16}
 
-        try:
-            steps = int(steps_entry.get())
-            exercise = exercise_entry.get()
-            time = int(time_entry.get())
-            cal = int(cal_entry.get())
+tk.Button(
+btn_frame,
+text="New Flashcard",
+command=new_flashcard,
+bg="#4CAF50",
+fg="white",
+**btn_style).grid(row=0,column=0,padx=10,pady=5)
 
-            cursor.execute(
-            "INSERT INTO fitness(date,steps,exercise,workout_time,calories) VALUES(?,?,?,?,?)",
-            (str(date.today()),steps,exercise,time,cal)
-            )
+tk.Button(
+btn_frame,
+text="Show Translation",
+command=show_translation,
+bg="#FF9800",
+fg="white",
+**btn_style).grid(row=0,column=1,padx=10,pady=5)
 
-            conn.commit()
+tk.Button(
+btn_frame,
+text="Start Quiz",
+command=start_quiz,
+bg="#2196F3",
+fg="white",
+**btn_style).grid(row=1,column=0,columnspan=2,pady=5)
 
-            messagebox.showinfo("Saved","Activity Saved")
+answer=tk.Entry(root,font=("Arial",14),width=25)
+answer.pack(pady=10)
 
-        except:
-            messagebox.showerror("Error","Enter valid data")
+tk.Button(
+root,
+text="Check Answer",
+command=check_answer,
+bg="#673AB7",
+fg="white",
+font=("Arial",12),
+width=20).pack(pady=10)
 
-    tk.Button(root,text="Save Activity",command=save_data,
-    bg="#27ae60",fg="white",font=("Arial",12)).pack(pady=5)
+score_label=tk.Label(
+root,
+text="Score : "+str(data["score"]),
+font=("Arial",14),
+bg="#f2f4f8")
 
-    # ---------------- DAILY GOAL ----------------
+score_label.pack()
 
-    progress_frame = tk.Frame(root,bg="white",bd=2,relief="groove")
-    progress_frame.pack(pady=10)
-
-    tk.Label(progress_frame,text="Daily Goal Progress (10000 Steps)").pack()
-
-    progress = ttk.Progressbar(progress_frame,length=350)
-    progress.pack(pady=10)
-
-    def update_progress():
-
-        cursor.execute("SELECT SUM(steps) FROM fitness WHERE date=?",(str(date.today()),))
-        result = cursor.fetchone()[0]
-
-        if result:
-            progress['value'] = min((result/10000)*100,100)
-        else:
-            progress['value'] = 0
-
-    tk.Button(root,text="Update Dashboard",
-    command=update_progress,bg="#2c3e50",fg="white").pack()
-
-    # ---------------- WEEKLY GRAPH ----------------
-
-    def weekly_graph():
-
-        week_dates=[]
-        week_steps=[]
-
-        for i in range(7):
-
-            day = date.today() - timedelta(days=i)
-            cursor.execute("SELECT SUM(steps) FROM fitness WHERE date=?",(str(day),))
-            result = cursor.fetchone()[0]
-
-            week_dates.append(str(day))
-            week_steps.append(result if result else 0)
-
-        week_dates.reverse()
-        week_steps.reverse()
-
-        plt.figure(figsize=(6,4))
-        plt.plot(week_dates,week_steps,marker='o')
-        plt.title("Weekly Steps Progress")
-        plt.xlabel("Date")
-        plt.ylabel("Steps")
-        plt.grid(True)
-        plt.show()
-
-    tk.Button(root,text="Weekly Steps Graph",
-    command=weekly_graph,bg="#e67e22",fg="white").pack(pady=5)
-
-    # ---------------- CALORIES PIE CHART ----------------
-
-    def calories_chart():
-
-        cursor.execute("SELECT exercise,SUM(calories) FROM fitness GROUP BY exercise")
-        data = cursor.fetchall()
-
-        if len(data)==0:
-            messagebox.showinfo("Info","No data available")
-            return
-
-        labels=[i[0] for i in data]
-        calories=[i[1] for i in data]
-
-        plt.figure(figsize=(5,5))
-        plt.pie(calories,labels=labels,autopct='%1.1f%%')
-        plt.title("Calories Burned by Exercise")
-        plt.show()
-
-    tk.Button(root,text="Calories Pie Chart",
-    command=calories_chart,bg="#8e44ad",fg="white").pack(pady=5)
-
-    root.mainloop()
-
-login_window.mainloop()
+root.mainloop()
